@@ -33,17 +33,22 @@ jobs:
           arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad Intel" --macos-app-version="1.0.0" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
           mv main.app kPad-mac_x86_64.app
 
-      # Upload artifacts
+      - name: Zip files so bundle is preserved
+        run: |
+          zip -r kPad-mac_arm64.zip kPad-mac_arm64.app
+          zip -r kPad-mac_x86_64.zip kPad-mac_x86_64.app
+
+
       - name: Upload ARM64 artifacts
         uses: actions/upload-artifact@v4
         with:
           name: kPad-mac_arm64
           path: |
-            kPad-mac_arm64.app
+            main.dist/kPad-mac_arm64.app
       
       - name: Upload Intel artifacts
         uses: actions/upload-artifact@v4
         with:
           name: kPad-mac_x86_64
           path: |
-            kPad-mac_x86_64.app
+            main.dist/kPad-mac_x86_64.app
