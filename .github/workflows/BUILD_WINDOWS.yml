@@ -26,7 +26,7 @@ jobs:
       # Nuitka build
       - name: Build with Nuitka
         run: |
-          python -m nuitka --standalone --onefile --disable-console main.py
+          python -m nuitka --standalone --onefile --disable-console --assume-yes-for-downloads main.py
           move main.dist\main.exe main.dist\kPad-Windows_x86_64.exe
 
       # Upload artifact

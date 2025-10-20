@@ -25,9 +25,9 @@ jobs:
 
       - name: Build job
         run: |
-          python -m nuitka --standalone --onefile --macos-app main.py
+          python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad ARM64" --macos-app-version="1.0.0" main.py
           mv main.dist/main.app main.dist/kPad-mac_arm64.app
-          arch -x86_64 python3 -m nuitka --standalone --onefile --macos-app --name=kPad-mac_x86_64 main.py
+          arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad Intel" --macos-app-version="1.0.0" main.py
           mv main.dist/main.app main.dist/kPad-mac_x86_64.app
 
       # Upload artifacts
