@@ -1,0 +1,37 @@
+jobs:
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Prepare job
+        run: |
+          python -m pip install --upgrade pip
+          pip install nuitka customtkinter
+
+      - name: Build job
+        run: |
+          python -m nuitka --standalone --onefile --macos-app --name=kPad-mac_arm64 main.py
+          arch -x86_64 python3 -m nuitka --standalone --onefile --macos-app --name=kPad-mac_x86_64 main.py
+
+      # Upload artifacts
+      - name: Upload ARM64 artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: kPad-mac_arm64
+          path: |
+            main.dist/kPad-mac_arm64.app
+      
+      - name: Upload Intel artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: kPad-mac_x86_64
+          path: |
+            main.dist/kPad-mac_x86_64.app
+      
