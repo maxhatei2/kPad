@@ -1,3 +1,11 @@
+name: Build kPad for macOS (Nuitka)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
 jobs:
   build-mac:
     runs-on: macos-latest
