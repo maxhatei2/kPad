@@ -26,12 +26,12 @@ jobs:
       # Nuitka build
       - name: Build with Nuitka
         run: |
-          python -m nuitka --standalone --onefile --disable-console --assume-yes-for-downloads main.py
-          move main.dist\main.exe main.dist\kPad-Windows_x86_64.exe
+          python -m nuitka --standalone --onefile --windows-console-mode=disable --enable-plugin=tk-inter --assume-yes-for-downloads main.py
+          move main.exe kPad-Windows_x86_64.exe
 
       # Upload artifact
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: kPad-Windows_x86_64
-          path: main.dist/kPad-Windows_x86_64.exe
+          path: kPad-Windows_x86_64.exe

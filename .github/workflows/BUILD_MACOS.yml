@@ -23,12 +23,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install nuitka customtkinter
 
-      - name: Build job
+      - name: Build job ARM64
         run: |
-          python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad ARM64" --macos-app-version="1.0.0" main.py
-          mv main.dist/main.app main.dist/kPad-mac_arm64.app
-          arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad Intel" --macos-app-version="1.0.0" main.py
-          mv main.dist/main.app main.dist/kPad-mac_x86_64.app
+          python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad ARM64" --macos-app-version="1.0.0" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
+          mv main.app kPad-mac_arm64.app
+
+      - name: Build job Intel
+        run: |
+          arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad Intel" --macos-app-version="1.0.0" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
+          mv main.app kPad-mac_x86_64.app
 
       # Upload artifacts
       - name: Upload ARM64 artifacts
@@ -44,4 +47,3 @@ jobs:
           name: kPad-mac_x86_64
           path: |
             main.dist/kPad-mac_x86_64.app
-      
