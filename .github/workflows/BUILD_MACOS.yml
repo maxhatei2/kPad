@@ -17,8 +17,10 @@ jobs:
 
       - name: Build job
         run: |
-          python -m nuitka --standalone --onefile --macos-app --name=kPad-mac_arm64 main.py
+          python -m nuitka --standalone --onefile --macos-app main.py
+          mv main.dist/main.app main.dist/kPad-mac_arm64.app
           arch -x86_64 python3 -m nuitka --standalone --onefile --macos-app --name=kPad-mac_x86_64 main.py
+          mv main.dist/main.app main.dist/kPad-mac_x86_64.app
 
       # Upload artifacts
       - name: Upload ARM64 artifacts
