@@ -33,7 +33,7 @@ jobs:
           arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad Intel" --macos-app-version="1.0.0" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
           mv main.app kPad-mac_x86_64.app
         
-              - name: Create Info.plist for ARM64
+      - name: Create Info.plist for ARM64
         run: |
           cat > main.dist/kPad-mac_arm64.app/Contents/Info.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
