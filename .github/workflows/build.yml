@@ -25,12 +25,12 @@ jobs:
 
       - name: Build job ARM64
         run: |
-          python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad ARM64" --macos-app-version="1.0.0" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
+          python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad ARM64" --macos-app-version="1.0.1" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
           mv main.app kPad-mac_arm64.app
 
       - name: Build job Intel
         run: |
-          arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad Intel" --macos-app-version="1.0.0" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
+          arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad Intel" --macos-app-version="1.0.1" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
           mv main.app kPad-mac_x86_64.app
         
       - name: Create Info.plist for ARM64
@@ -47,7 +47,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.maxhatei2.kPad</string>
               <key>CFBundleVersion</key>
-              <string>1.0.0</string>
+              <string>1.0.1</string>
               <key>CFBundleExecutable</key>
               <string>main</string>
               <key>CFBundlePackageType</key>
@@ -70,7 +70,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.maxhatei2.kPad</string>
               <key>CFBundleVersion</key>
-              <string>1.0.0</string>
+              <string>1.0.1</string>
               <key>CFBundleExecutable</key>
               <string>main</string>
               <key>CFBundlePackageType</key>

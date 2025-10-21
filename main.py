@@ -3,6 +3,19 @@ from tkinter.filedialog import asksaveasfilename, askopenfilename
 from tkinter import Menu
 from tkinter.messagebox import showinfo, askyesno
 from tkinter import simpledialog
+import time, threading
+
+CONFIGURATION = {
+    'auto_save': {
+        'enabled': True,
+        'time_until_next_save': 5, # seconds
+            },
+    'undo': {
+        'enabled': True,
+        'max_undo': 20, # use -1 for infinite
+        'separate_edits_from_undos': True
+            }
+                 }
 
 _fonts = ['Menlo', 'Monaco', 'Helvetica', 'Arial', 'Times New Roman', 'Georgia', 'Avenir', 'Baskerville', 'Futura', 'Verdana', 'Gill Sans', 'Courier', 'Optima', 'American Typewriter']
 
@@ -11,6 +24,7 @@ class App(ctk.CTk):
         super().__init__()
 
         self.path = None
+        self.font_size = 14
 
         def newfile(event=None):
             if not '*' in self.title()[7]:
@@ -38,16 +52,30 @@ class App(ctk.CTk):
                 save_as()
             with open(self.path, 'w', encoding='utf-8') as f:
                 f.write(self.textbox.get('1.0', 'end-1c'))
+            self.title(f'kPad - {self.path}')
+
         
         def open_from_file(event=None):
             self.path = askopenfilename(filetypes=[('Text files', '.txt'), ('kPad notefile', '.kpad')], defaultextension='.txt')
-            self.textbox.delete('1.0', 'end')
-            with open(self.path, "r") as file:
-                self.textbox.insert('1.0', file.read())
+            if self.path:
+                self.textbox.delete('1.0', 'end')
+                with open(self.path, "r") as file:
+                    self.textbox.insert('1.0', file.read())
+            else:
+                pass
 
         def set_font(font):
             self.font.configure(family=font)
             self.textbox.configure(font=self.font)
+
+        def autosave():
+            while True:
+                if CONFIGURATION['auto_save']['enabled']:
+                    if self.path and 'Untitled' not in self.title():
+                        save_file()
+                time.sleep(CONFIGURATION['auto_save']['time_until_next_save'])
+            
+        threading.Thread(target=autosave, daemon=True).start()
 
         def toggle_theme(event=None):
             mode = ctk.get_appearance_mode()
@@ -58,6 +86,18 @@ class App(ctk.CTk):
 
         def go_to_end(event=None):
             self.textbox.yview_moveto(1)
+
+        def increment_font_size(event=None):
+            self.font_size += 2
+            self.font = ctk.CTkFont(family=self.font._family, size=self.font_size)
+            self.textbox.configure(font=self.font)
+            return "break"
+
+        def decrement_font_size(event=None):
+            self.font_size = max(2, self.font_size - 2)
+            self.font = ctk.CTkFont(family=self.font._family, size=self.font_size)
+            self.textbox.configure(font=self.font)
+            return "break"
 
         def go_to_line(event=None):
             line = simpledialog.askinteger("Go To Line", "Enter line number:")
@@ -92,7 +132,7 @@ class App(ctk.CTk):
 
         self.configure(menu=menu)
 
-        self.font = ctk.CTkFont(family=_fonts[0])
+        self.font = ctk.CTkFont(family=_fonts[0], size=self.font_size)
 
         def update_cursor_info(event=None):
             pos = self.textbox.index("insert")
@@ -107,7 +147,7 @@ class App(ctk.CTk):
         self.title(title)
         self.geometry(f'{geometry[0]}x{geometry[1]}')
 
-        self.textbox = ctk.CTkTextbox(self)
+        self.textbox = ctk.CTkTextbox(self, undo=CONFIGURATION['undo']['enabled'], autoseparators=CONFIGURATION['undo']['separate_edits_from_undos'], maxundo=CONFIGURATION['undo']['max_undo'])
         self.textbox.configure(font=self.font)
 
         self.textbox.bind("<KeyRelease>", update_cursor_info)
@@ -117,6 +157,9 @@ class App(ctk.CTk):
         self.bind('<Command-o>', open_from_file)
         self.bind('<Command-t>', toggle_theme)
         self.bind('<Command-n>', newfile)
+        self.bind('<Command-plus>', increment_font_size)
+        self.bind('<Command-minus>', decrement_font_size)
+
 
         self.stats_text_frame = ctk.CTkFrame(self)
         self.stats_text_frame.pack(fill='x', side=ctk.BOTTOM)
