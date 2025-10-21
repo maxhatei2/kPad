@@ -32,6 +32,52 @@ jobs:
         run: |
           arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad Intel" --macos-app-version="1.0.0" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
           mv main.app kPad-mac_x86_64.app
+        
+              - name: Create Info.plist for ARM64
+        run: |
+          cat > main.dist/kPad-mac_arm64.app/Contents/Info.plist << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>kPad ARM64</string>
+    <key>CFBundleDisplayName</key>
+    <string>kPad ARM64</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.matt.kPad</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>CFBundleExecutable</key>
+    <string>main</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+</dict>
+</plist>
+EOF
+
+      - name: Create Info.plist for Intel
+        run: |
+          cat > main.dist/kPad-mac_x86_64.app/Contents/Info.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>kPad Intel</string>
+              <key>CFBundleDisplayName</key>
+              <string>kPad Intel</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.matt.kPad</string>
+              <key>CFBundleVersion</key>
+              <string>1.0.0</string>
+              <key>CFBundleExecutable</key>
+              <string>main</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+          </dict>
+          </plist>
+          EOF
 
       - name: Zip files so bundle is preserved
         run: |
