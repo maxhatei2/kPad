@@ -90,11 +90,11 @@ jobs:
         with:
           name: kPad-mac_arm64
           path: |
-            main.dist/kPad-mac_arm64.zip
+            \kPad-mac_arm64.zip
       
       - name: Upload Intel artifacts
         uses: actions/upload-artifact@v4
         with:
           name: kPad-mac_x86_64
           path: |
-            main.dist/kPad-mac_x86_64.zip
+            kPad-mac_x86_64.zip
