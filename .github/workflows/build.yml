@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  VER: "1.0.0"
-
 jobs:
   build-mac:
     runs-on: macos-latest
@@ -28,12 +25,12 @@ jobs:
 
       - name: Build job ARM64
         run: |
-          python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad ARM64" --macos-app-version="$VER" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
+          python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad ARM64" --macos-app-version="1.0.0" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
           mv main.app kPad-mac_arm64.app
 
       - name: Build job Intel
         run: |
-          arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad Intel" --macos-app-version="$VER" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
+          arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad Intel" --macos-app-version="1.0.0" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
           mv main.app kPad-mac_x86_64.app
         
       - name: Create Info.plist for ARM64
@@ -50,7 +47,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.maxhatei2.kPad</string>
               <key>CFBundleVersion</key>
-              <string>$VER</string>
+              <string>1.0.0</string>
               <key>CFBundleExecutable</key>
               <string>main</string>
               <key>CFBundlePackageType</key>
@@ -73,7 +70,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.maxhatei2.kPad</string>
               <key>CFBundleVersion</key>
-              <string>$VER</string>
+              <string>1.0.0</string>
               <key>CFBundleExecutable</key>
               <string>main</string>
               <key>CFBundlePackageType</key>
@@ -91,9 +88,9 @@ jobs:
       - name: Upload ARM64 artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kPad-${VER}-mac_arm64
+          name: kPad-mac_arm64
           path: |
-            \kPad-${VER}-mac_arm64.zip
+            kPad-mac_arm64.zip
       
       - name: Upload Intel artifacts
         uses: actions/upload-artifact@v4
