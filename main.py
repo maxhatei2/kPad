@@ -4,18 +4,38 @@ from tkinter import Menu
 from tkinter.messagebox import showinfo, askyesno
 from tkinter import simpledialog
 import time, threading
+import os, json, platform
 
-CONFIGURATION = {
-    'auto_save': {
-        'enabled': True,
-        'time_until_next_save': 5, # seconds
-            },
-    'undo': {
-        'enabled': True,
-        'max_undo': 20, # use -1 for infinite
-        'separate_edits_from_undos': True
-            }
-                 }
+
+# ██╗░░██╗██████╗░░█████╗░██████╗░
+# ██║░██╔╝██╔══██╗██╔══██╗██╔══██╗
+# █████═╝░██████╔╝███████║██║░░██║
+# ██╔═██╗░██╔═══╝░██╔══██║██║░░██║
+# ██║░╚██╗██║░░░░░██║░░██║██████╔╝
+# ╚═╝░░╚═╝╚═╝░░░░░╚═╝░░╚═╝╚═════╝░
+# Version 1.1.0      [SOURCE CODE]
+
+if platform.system() == 'Darwin':
+    config_dir = os.path.expanduser('~/Library/Application Support/kPad')
+elif platform.system() == 'Windows':
+    config_dir = os.path.join(os.getenv('APPDATA'), 'kPad')
+else:
+    config_dir = os.path.expanduser('~/.config/kpad')
+os.makedirs(config_dir, exist_ok=True)
+CONFIG_PATH = os.path.join(config_dir, 'config.json')
+if os.path.exists(CONFIG_PATH):
+    with open(CONFIG_PATH, 'r') as f:
+        CONFIGURATION = json.load(f)
+else:
+    CONFIGURATION = {
+        'auto_save': {'enabled': True, 'time_until_next_save': 5},
+        'undo': {'enabled': True, 'max_undo': 20, 'separate_edits_from_undos': True},
+        'word_wrap': True,
+        'font': 'Menlo',
+        'font_size': 14,
+        'window_geometry': [500, 400],
+        'recent_files': {'enabled': True, 'keep_recent_files_count': 5, 'recent_file_paths': []}
+}
 
 _fonts = ['Menlo', 'Monaco', 'Helvetica', 'Arial', 'Times New Roman', 'Georgia', 'Avenir', 'Baskerville', 'Futura', 'Verdana', 'Gill Sans', 'Courier', 'Optima', 'American Typewriter']
 
@@ -25,6 +45,15 @@ class App(ctk.CTk):
 
         self.path = None
         self.font_size = 14
+
+        def write_to_recent_files():
+            if CONFIGURATION['recent_files']['enabled']:
+                if len(CONFIGURATION['recent_files']['recent_file_paths']) >= CONFIGURATION['recent_files']['keep_recent_files_count']:
+                    del CONFIGURATION['recent_files']['recent_file_paths'][0]
+                    CONFIGURATION['recent_files']['recent_file_paths'].append(self.path)
+                else:
+                    CONFIGURATION['recent_files']['recent_file_paths'].append(self.path)
+
 
         def newfile(event=None):
             if not '*' in self.title()[7]:
@@ -55,12 +84,15 @@ class App(ctk.CTk):
             self.title(f'kPad - {self.path}')
 
         
-        def open_from_file(event=None):
-            self.path = askopenfilename(filetypes=[('Text files', '.txt'), ('kPad notefile', '.kpad')], defaultextension='.txt')
+        def open_from_file(event=None, path=None):
+            if not path:
+                self.path = askopenfilename(filetypes=[('Text files', '.txt'), ('kPad notefile', '.kpad')], defaultextension='.txt')
             if self.path:
                 self.textbox.delete('1.0', 'end')
-                with open(self.path, "r") as file:
+                with open(self.path, 'r') as file:
                     self.textbox.insert('1.0', file.read())
+                write_to_recent_files()
+                print(CONFIGURATION['recent_files']['recent_file_paths'])
             else:
                 pass
 
@@ -79,7 +111,7 @@ class App(ctk.CTk):
 
         def toggle_theme(event=None):
             mode = ctk.get_appearance_mode()
-            ctk.set_appearance_mode("Light" if mode == "Dark" else "Dark")
+            ctk.set_appearance_mode('Light' if mode == 'Dark' else 'Dark')
 
         def go_to_start(event=None):
             self.textbox.yview_moveto(0)
@@ -91,34 +123,55 @@ class App(ctk.CTk):
             self.font_size += 2
             self.font = ctk.CTkFont(family=self.font._family, size=self.font_size)
             self.textbox.configure(font=self.font)
-            return "break"
+            return 'break'
 
         def decrement_font_size(event=None):
             self.font_size = max(2, self.font_size - 2)
             self.font = ctk.CTkFont(family=self.font._family, size=self.font_size)
             self.textbox.configure(font=self.font)
-            return "break"
+            return 'break'
 
         def go_to_line(event=None):
-            line = simpledialog.askinteger("Go To Line", "Enter line number:")
+            line = simpledialog.askinteger('Go To Line', 'Enter line number:')
             if line is None:
                 return
-            total_lines = int(self.textbox.index("end-1c").split(".")[0])
+            total_lines = int(self.textbox.index('end-1c').split('.')[0])
             line = max(1, min(line, total_lines))
-            line_text = self.textbox.get(f"{line}.0", f"{line}.end")
+            line_text = self.textbox.get(f'{line}.0', f'{line}.end')
             max_col = len(line_text)
-            self.textbox.mark_set("insert", f"{line}.0")
-            self.textbox.see("insert")
+            self.textbox.mark_set('insert', f'{line}.0')
+            self.textbox.see('insert')
             self.textbox.focus()
+        
+        word_wrap_var = ctk.BooleanVar(value=CONFIGURATION['word_wrap'])
+
+        def toggle_word_wrap():
+            if word_wrap_var.get():
+                self.textbox.configure(wrap='word')
+                CONFIGURATION['word_wrap'] = True
+            else:
+                self.textbox.configure(wrap='none')
+                CONFIGURATION['word_wrap'] = False
+        
+        def save_config():
+            CONFIGURATION['font'] = self.font._family
+            CONFIGURATION['font_size'] = self.font_size
+            CONFIGURATION['word_wrap'] = word_wrap_var.get()
+            CONFIGURATION['window_geometry'] = [self.winfo_width(), self.winfo_height()]
+            with open(CONFIG_PATH, 'w') as f:
+                json.dump(CONFIGURATION, f, indent=4)
 
         menu = Menu(self)
         file_menu = Menu(menu, tearoff=0)
-        file_menu.add_command(label="Open", command=open_from_file)
-        file_menu.add_command(label="Save As...", command=save_as)
+        file_menu.add_command(label='Open', command=open_from_file)
+        file_menu.add_command(label='Save As...', command=save_as)
         file_menu.add_command(label='Save...', command=save_file)
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.destroy)
-        menu.add_cascade(label="File", menu=file_menu)
+        for index, path in CONFIGURATION['recent_files']['recent_files_paths']:
+            file_menu.add_command(label=f'Open {path} ({index+1})...')
+        file_menu.add_separator()
+        file_menu.add_command(label='Exit', command=self.destroy)
+        menu.add_cascade(label='File', menu=file_menu)
         font_menu = Menu(menu, tearoff=0)
         for _font in _fonts:
             font_menu.add_command(label=_font, command=lambda f=_font: set_font(f))
@@ -128,17 +181,20 @@ class App(ctk.CTk):
         view_menu.add_command(label='Go to End...', command=go_to_end)
         view_menu.add_separator()
         view_menu.add_command(label='Go to Line...', command=go_to_line)
+        view_menu.add_separator()
+        view_menu.add_checkbutton(label='Word Wrap...', onvalue=True, variable=word_wrap_var, command=toggle_word_wrap)
         menu.add_cascade(label='View', menu=view_menu)
 
         self.configure(menu=menu)
 
-        self.font = ctk.CTkFont(family=_fonts[0], size=self.font_size)
+        self.font = ctk.CTkFont(family=CONFIGURATION['font'], size=CONFIGURATION['font_size'])
+        self.font_size = CONFIGURATION['font_size']
 
         def update_cursor_info(event=None):
-            pos = self.textbox.index("insert")
-            line, col = map(int, pos.split("."))
-            chars = len(self.textbox.get("1.0", "end-1c"))
-            self.stats_line_col.configure(text=f"Ln: {line}  Col: {col + 1}  Ch: {chars}")
+            pos = self.textbox.index('insert')
+            line, col = map(int, pos.split('.'))
+            chars = len(self.textbox.get('1.0', 'end-1c'))
+            self.stats_line_col.configure(text=f'Ln: {line}  Col: {col + 1}  Ch: {chars}')
             if self.path != None:
                 self.title(f'kPad - *{self.path}')
             else:
@@ -149,16 +205,28 @@ class App(ctk.CTk):
 
         self.textbox = ctk.CTkTextbox(self, undo=CONFIGURATION['undo']['enabled'], autoseparators=CONFIGURATION['undo']['separate_edits_from_undos'], maxundo=CONFIGURATION['undo']['max_undo'])
         self.textbox.configure(font=self.font)
+        if word_wrap_var.get():
+            self.textbox.configure(wrap='word')
+        else:
+            self.textbox.configure(wrap='none')
 
-        self.textbox.bind("<KeyRelease>", update_cursor_info)
-        self.textbox.bind("<ButtonRelease>", update_cursor_info)
-        self.bind("<Control-l>", go_to_line)
-        self.bind('<Command-s>', save_file)
-        self.bind('<Command-o>', open_from_file)
-        self.bind('<Command-t>', toggle_theme)
-        self.bind('<Command-n>', newfile)
-        self.bind('<Command-plus>', increment_font_size)
-        self.bind('<Command-minus>', decrement_font_size)
+        self.textbox.bind('<KeyRelease>', update_cursor_info)
+        self.textbox.bind('<ButtonRelease>', update_cursor_info)
+
+        # Cross-platform key bindings
+        system = platform.system()
+        if system == "Darwin":
+            mod = "Command"
+        else:
+            mod = "Control"
+
+        self.bind(f'<{mod}-l>', go_to_line)
+        self.bind(f'<{mod}-s>', save_file)
+        self.bind(f'<{mod}-o>', open_from_file)
+        self.bind(f'<{mod}-t>', toggle_theme)
+        self.bind(f'<{mod}-n>', newfile)
+        self.bind(f'<{mod}-equal>', increment_font_size)
+        self.bind(f'<{mod}-minus>', decrement_font_size)
 
 
         self.stats_text_frame = ctk.CTkFrame(self)
@@ -168,6 +236,7 @@ class App(ctk.CTk):
         self.stats_line_col.pack(side=ctk.RIGHT)
 
         self.textbox.pack(fill='both', expand=True)
+        self.protocol('WM_DELETE_WINDOW', lambda: [save_file(), save_config(), self.destroy()])
 
 
-App('kPad - Untitled', [500, 400]).mainloop()
+App('kPad - Untitled', CONFIGURATION['window_geometry']).mainloop()

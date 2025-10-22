@@ -25,20 +25,20 @@ jobs:
 
       - name: Build job ARM64
         run: |
-          python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad ARM64" --macos-app-version="1.0.2" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
+          python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name='kPad ARM64' --macos-app-version='1.1.0' --enable-plugin=tk-inter --assume-yes-for-downloads main.py
           mv main.app kPad-mac_arm64.app
 
       - name: Build job Intel
         run: |
-          arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name="kPad Intel" --macos-app-version="1.0.2" --enable-plugin=tk-inter --assume-yes-for-downloads main.py
+          arch -x86_64 python -m nuitka --standalone --onefile --macos-create-app-bundle --macos-app-name='kPad Intel' --macos-app-version='1.1.0' --enable-plugin=tk-inter --assume-yes-for-downloads main.py
           mv main.app kPad-mac_x86_64.app
         
       - name: Create Info.plist for ARM64
         run: |
           cat > kPad-mac_arm64.app/Contents/Info.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
+          <?xml version='1.0' encoding='UTF-8'?>
+          <!DOCTYPE plist PUBLIC '-//Apple//DTD PLIST 1.0//EN' 'http://www.apple.com/DTDs/PropertyList-1.0.dtd'>
+          <plist version='1.0'>
           <dict>
               <key>CFBundleName</key>
               <string>kPad</string>
@@ -47,7 +47,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.maxhatei2.kPad</string>
               <key>CFBundleVersion</key>
-              <string>1.0.2</string>
+              <string>1.1.0</string>
               <key>CFBundleExecutable</key>
               <string>main</string>
               <key>CFBundlePackageType</key>
@@ -59,9 +59,9 @@ jobs:
       - name: Create Info.plist for Intel
         run: |
           cat > kPad-mac_x86_64.app/Contents/Info.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
+          <?xml version='1.0' encoding='UTF-8'?>
+          <!DOCTYPE plist PUBLIC '-//Apple//DTD PLIST 1.0//EN' 'http://www.apple.com/DTDs/PropertyList-1.0.dtd'>
+          <plist version='1.0'>
           <dict>
               <key>CFBundleName</key>
               <string>kPad Intel</string>
@@ -70,7 +70,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.maxhatei2.kPad</string>
               <key>CFBundleVersion</key>
-              <string>1.0.2</string>
+              <string>1.1.0</string>
               <key>CFBundleExecutable</key>
               <string>main</string>
               <key>CFBundlePackageType</key>
