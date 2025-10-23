@@ -5,9 +5,6 @@ from tkinter.messagebox import showinfo, askyesno
 from tkinter import simpledialog
 import time, threading
 import os, json, platform
-import markdown
-from tkinterweb import HtmlFrame
-
 
 # ██╗░░██╗██████╗░░█████╗░██████╗░
 # ██║░██╔╝██╔══██╗██╔══██╗██╔══██╗
@@ -15,15 +12,19 @@ from tkinterweb import HtmlFrame
 # ██╔═██╗░██╔═══╝░██╔══██║██║░░██║
 # ██║░╚██╗██║░░░░░██║░░██║██████╔╝
 # ╚═╝░░╚═╝╚═╝░░░░░╚═╝░░╚═╝╚═════╝░
-# Version 1.1.0      [SOURCE CODE]
+# Version 1.2.0      [SOURCE CODE]
 
 if platform.system() == 'Darwin':
     config_dir = os.path.expanduser('~/Library/Application Support/kPad')
+    plugin_dir = os.path.expanduser(f'{config_dir}/plugins')
 elif platform.system() == 'Windows':
     config_dir = os.path.join(os.getenv('APPDATA'), 'kPad')
+    plugin_dir = os.path.join(os.getenv('APPDATA'), 'kPad', 'Plugins')
 else:
     config_dir = os.path.expanduser('~/.config/kpad')
+    plugin_dir = os.path.expanduser(f'{config_dir}/plugins')
 os.makedirs(config_dir, exist_ok=True)
+os.makedirs(plugin_dir, exist_ok=True)
 CONFIG_PATH = os.path.join(config_dir, 'config.json')
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, 'r') as f:
@@ -41,9 +42,88 @@ else:
 
 _fonts = ['Menlo', 'Monaco', 'Helvetica', 'Arial', 'Times New Roman', 'Georgia', 'Avenir', 'Baskerville', 'Futura', 'Verdana', 'Gill Sans', 'Courier', 'Optima', 'American Typewriter']
 
+class PluginAPI:
+    def __init__(self, textbox, appinstance):
+        self.textbox = textbox
+        self._appinstance = appinstance
+    def get_text_from_box(self):
+        return self.textbox.get("1.0", "end-1c")
+    def get_specific_text_from_box(self, start, end):
+        return self.textbox.get(start, end)
+    def clear_text_from_box(self):
+        self.textbox.delete("1.0", "end")
+    def insert_text_to_start_of_box(self, text):
+        self.textbox.insert("1.0", text)
+    def insert_text_to_end_of_box(self, text):
+        self.textbox.insert("end", text)
+    def bind(self, sequence, callback):
+        def wrapper(event):
+            try:
+                callback(event)
+            except TypeError:
+                callback()
+            return "break"
+        self.textbox.bind(sequence, wrapper)
+    def get_plugin_path(self, plugin_name):
+        return os.path.join(plugin_dir, plugin_name)
+    def get_current_file_path(self):
+        return self._appinstance.path
+    def get_current_theme_mode(self):
+        return ctk.get_appearance_mode()
+    def set_current_theme_mode(self, mode):
+        if mode == 'light':
+            ctk.set_appearance_mode('light')
+        else:
+            ctk.set_appearance_mode('dark')
+    def set_theme_file(self, json_path):
+            if os.path.exists(json_path):
+                ctk.set_default_color_theme(json_path)
+    def show_info(self, text):
+        showinfo("Info", text)
+
+    def show_error(self, text):
+        showinfo("Error", text)
+
+    def log(self, text):
+        print(f"[PLUGIN LOG] {text}")
+    
+
 class App(ctk.CTk):
     def __init__(self, title, geometry):
         super().__init__()
+
+        import importlib.util
+
+        self.textbox = ctk.CTkTextbox(self, undo=CONFIGURATION['undo']['enabled'], autoseparators=CONFIGURATION['undo']['separate_edits_from_undos'], maxundo=CONFIGURATION['undo']['max_undo'])
+
+        def __load_plugins():
+            plugins = []
+            if not os.path.exists(plugin_dir):
+                os.makedirs(plugin_dir)
+            for folder in os.listdir(plugin_dir):
+                folder_path = os.path.join(plugin_dir, folder)
+                if not os.path.isdir(folder_path):
+                    continue
+                logic_path = os.path.join(folder_path, "logic.py")
+                if os.path.exists(logic_path):
+                    name = folder
+                    try:
+                        spec = importlib.util.spec_from_file_location(name, logic_path)
+                        mod = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(mod)
+                        meta_path = os.path.join(folder_path, "metadata.json")
+                        metadata = None
+                        if os.path.exists(meta_path):
+                            with open(meta_path, "r") as f:
+                                metadata = json.load(f)
+                        if hasattr(mod, "action"):
+                            plugins.append({"module": mod, "meta": metadata})
+                    except Exception as e:
+                        print(f"[PLUGIN ERROR] Failed to load '{name}': {e}")
+
+            return plugins
+    
+        PLUGINS_LIST = __load_plugins()
 
         self.path = None
         self.font_size = 14
@@ -167,20 +247,36 @@ class App(ctk.CTk):
             tb = event.widget
             cursor_index = tb.index("insert")
             line_number = int(cursor_index.split('.')[0])
-            if line_number > 1:
-                prev_line = tb.get(f"{line_number-1}.0", f"{line_number-1}.end")
-                indent = len(prev_line) - len(prev_line.lstrip(' '))
-                if prev_line.strip().endswith(":") or prev_line.strip().endswith("{"):
-                    indent += 4
+            indent = 0
             prev_line_num = line_number - 1
             while prev_line_num > 0:
                 prev_line_text = tb.get(f"{prev_line_num}.0", f"{prev_line_num}.end")
                 if prev_line_text.strip() != "":
+                    indent = len(prev_line_text) - len(prev_line_text.lstrip(' '))
+                    if prev_line_text.rstrip().endswith((':', '{')):
+                        indent += 4
                     break
                 prev_line_num -= 1
-                indent = len(prev_line_text) - len(prev_line_text.lstrip(' '))
-                tb.insert("insert", "\n" + " " * indent)
-                return "break"
+            current_line_text = tb.get(f"{line_number}.0", f"{line_number}.end")
+            if current_line_text.strip() == "":
+                tb.insert("insert", " " * indent)
+            tb.insert("insert", "\n" + " " * indent)
+            return "break"
+                
+        def add_second_char(char, event=None):
+            def insert_char():
+                cursor = self.textbox.index("insert")
+                if char == '{':
+                    self.textbox.insert(cursor, '}')
+                elif char == '[':
+                    self.textbox.insert(cursor, ']')
+                elif char == '(':
+                    self.textbox.insert(cursor, ')')
+            self.after(1, insert_char)
+
+        def handle_brackets(event):
+            if event.char in '{[(':
+                add_second_char(event.char)
 
         menu = Menu(self)
         file_menu = Menu(menu, tearoff=0)
@@ -205,6 +301,15 @@ class App(ctk.CTk):
         view_menu.add_separator()
         view_menu.add_checkbutton(label='Word Wrap...', onvalue=True, variable=word_wrap_var, command=toggle_word_wrap)
         menu.add_cascade(label='View', menu=view_menu)
+        self.plugins_menu = Menu(menu, tearoff=0)
+        menu.add_cascade(label="Plugins", menu=self.plugins_menu)
+
+        editor_api = PluginAPI(self.textbox, self)
+        self.plugins_list = PLUGINS_LIST
+        for plugin in self.plugins_list:
+            meta = plugin["meta"]
+            name = meta.get("name") if meta else plugin["module"].__name__
+            self.plugins_menu.add_command(label=name, command=lambda p=plugin: p["module"].action(editor_api))
 
         self.configure(menu=menu)
 
@@ -224,7 +329,6 @@ class App(ctk.CTk):
         self.title(title)
         self.geometry(f'{geometry[0]}x{geometry[1]}')
 
-        self.textbox = ctk.CTkTextbox(self, undo=CONFIGURATION['undo']['enabled'], autoseparators=CONFIGURATION['undo']['separate_edits_from_undos'], maxundo=CONFIGURATION['undo']['max_undo'])
         self.textbox.configure(font=self.font)
         if word_wrap_var.get():
             self.textbox.configure(wrap='word')
@@ -250,6 +354,7 @@ class App(ctk.CTk):
         self.bind(f'<{mod}-equal>', increment_font_size)
         self.bind(f'<{mod}-minus>', decrement_font_size)
 
+        self.textbox.bind('<Key>', handle_brackets)
 
         self.stats_text_frame = ctk.CTkFrame(self)
         self.stats_text_frame.pack(fill='x', side=ctk.BOTTOM)
@@ -257,9 +362,7 @@ class App(ctk.CTk):
         self.stats_line_col = ctk.CTkLabel(self.stats_text_frame, text='Ln: 1 Col: 1 Ch: 0')
         self.stats_line_col.pack(side=ctk.RIGHT)
 
-        self.html = markdown.markdown()
         self.textbox.pack(fill='both', expand=True)
-        self.html_frame.pack(fill='both', expand=True)
         self.protocol('WM_DELETE_WINDOW', lambda: [save_file(), save_config(), self.destroy()])
 
 
