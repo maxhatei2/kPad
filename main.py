@@ -5,6 +5,8 @@ from tkinter.messagebox import showinfo, askyesno
 from tkinter import simpledialog
 import time, threading
 import os, json, platform
+import markdown
+from tkinterweb import HtmlFrame
 
 
 # ██╗░░██╗██████╗░░█████╗░██████╗░
@@ -160,6 +162,25 @@ class App(ctk.CTk):
             CONFIGURATION['window_geometry'] = [self.winfo_width(), self.winfo_height()]
             with open(CONFIG_PATH, 'w') as f:
                 json.dump(CONFIGURATION, f, indent=4)
+        
+        def auto_indent(event):
+            tb = event.widget
+            cursor_index = tb.index("insert")
+            line_number = int(cursor_index.split('.')[0])
+            if line_number > 1:
+                prev_line = tb.get(f"{line_number-1}.0", f"{line_number-1}.end")
+                indent = len(prev_line) - len(prev_line.lstrip(' '))
+                if prev_line.strip().endswith(":") or prev_line.strip().endswith("{"):
+                    indent += 4
+            prev_line_num = line_number - 1
+            while prev_line_num > 0:
+                prev_line_text = tb.get(f"{prev_line_num}.0", f"{prev_line_num}.end")
+                if prev_line_text.strip() != "":
+                    break
+                prev_line_num -= 1
+                indent = len(prev_line_text) - len(prev_line_text.lstrip(' '))
+                tb.insert("insert", "\n" + " " * indent)
+                return "break"
 
         menu = Menu(self)
         file_menu = Menu(menu, tearoff=0)
@@ -167,8 +188,8 @@ class App(ctk.CTk):
         file_menu.add_command(label='Save As...', command=save_as)
         file_menu.add_command(label='Save...', command=save_file)
         file_menu.add_separator()
-        for index, path in CONFIGURATION['recent_files']['recent_files_paths']:
-            file_menu.add_command(label=f'Open {path} ({index+1})...')
+        for index, path in enumerate(CONFIGURATION['recent_files']['recent_file_paths']):
+            file_menu.add_command(label=f'Open {path} ({index+1})...', command=lambda p=path: open_from_file(p))
         file_menu.add_separator()
         file_menu.add_command(label='Exit', command=self.destroy)
         menu.add_cascade(label='File', menu=file_menu)
@@ -212,6 +233,7 @@ class App(ctk.CTk):
 
         self.textbox.bind('<KeyRelease>', update_cursor_info)
         self.textbox.bind('<ButtonRelease>', update_cursor_info)
+        self.textbox.bind('<Return>', auto_indent)
 
         # Cross-platform key bindings
         system = platform.system()
@@ -235,7 +257,9 @@ class App(ctk.CTk):
         self.stats_line_col = ctk.CTkLabel(self.stats_text_frame, text='Ln: 1 Col: 1 Ch: 0')
         self.stats_line_col.pack(side=ctk.RIGHT)
 
+        self.html = markdown.markdown()
         self.textbox.pack(fill='both', expand=True)
+        self.html_frame.pack(fill='both', expand=True)
         self.protocol('WM_DELETE_WINDOW', lambda: [save_file(), save_config(), self.destroy()])
 
 

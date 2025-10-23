@@ -3,6 +3,8 @@ kPad is a Notepad app made in Python and CustomTkinter.
 
 **If you want to compile for your platform or just run the file, you will need customtkinter installed.**
 
+### kPad 1.1.1 (RC2)
+
 ## Description
 kPad is a lightweight and user-friendly text editor designed for quick note-taking and editing. Built using Python and the CustomTkinter library, it offers a modern interface with essential features for everyday text editing tasks.
 
@@ -32,7 +34,7 @@ Make sure you have Python 3.13+.
 
   **Cmd-N** -> New file
 
-   I hope to add config files / config dictionary in the next releases.
+   Config files in their respective folder.
 - Responsive window resizing.
 
 ## Running the App
@@ -55,3 +57,10 @@ Requests features with a new **issue**.
 ---
 
 Feel free to contribute or report issues on the **project repository**.
+
+## TODO
+- [ ] Add syntax highlighting for Python
+- [ ] Implement recent files menu
+- [ ] Add find/search dialog
+- [ ] Improve autosave with dirty flag
+- [ ] Implement extensions
