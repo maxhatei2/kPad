@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from tkinter.filedialog import asksaveasfilename, askopenfilename
 from tkinter import Menu
-from tkinter.messagebox import showinfo, askyesno
+from tkinter.messagebox import showinfo, askyesno, askyesnocancel
 from tkinter import simpledialog
 import time, threading
 import os, json, platform
@@ -12,7 +12,7 @@ import os, json, platform
 # ██╔═██╗░██╔═══╝░██╔══██║██║░░██║
 # ██║░╚██╗██║░░░░░██║░░██║██████╔╝
 # ╚═╝░░╚═╝╚═╝░░░░░╚═╝░░╚═╝╚═════╝░
-# Version 1.2.0      [SOURCE CODE]
+# Version 1.2.1      [SOURCE CODE]
 
 if platform.system() == 'Darwin':
     config_dir = os.path.expanduser('~/Library/Application Support/kPad')
@@ -37,7 +37,8 @@ else:
         'font': 'Menlo',
         'font_size': 14,
         'window_geometry': [500, 400],
-        'recent_files': {'enabled': True, 'keep_recent_files_count': 5, 'recent_file_paths': []}
+        'recent_files': {'enabled': True, 'keep_recent_files_count': 5, 'recent_file_paths': []},
+        'auto_start_plugins': []
 }
 
 _fonts = ['Menlo', 'Monaco', 'Helvetica', 'Arial', 'Times New Roman', 'Georgia', 'Avenir', 'Baskerville', 'Futura', 'Verdana', 'Gill Sans', 'Courier', 'Optima', 'American Typewriter']
@@ -46,23 +47,24 @@ class PluginAPI:
     def __init__(self, textbox, appinstance):
         self.textbox = textbox
         self._appinstance = appinstance
+        
     def get_text_from_box(self):
-        return self.textbox.get("1.0", "end-1c")
+        return self.textbox.get('1.0', 'end-1c')
     def get_specific_text_from_box(self, start, end):
         return self.textbox.get(start, end)
     def clear_text_from_box(self):
-        self.textbox.delete("1.0", "end")
+        self.textbox.delete('1.0', 'end')
     def insert_text_to_start_of_box(self, text):
-        self.textbox.insert("1.0", text)
+        self.textbox.insert('1.0', text)
     def insert_text_to_end_of_box(self, text):
-        self.textbox.insert("end", text)
+        self.textbox.insert('end', text)
     def bind(self, sequence, callback):
         def wrapper(event):
             try:
                 callback(event)
             except TypeError:
                 callback()
-            return "break"
+            return 'break'
         self.textbox.bind(sequence, wrapper)
     def get_plugin_path(self, plugin_name):
         return os.path.join(plugin_dir, plugin_name)
@@ -79,14 +81,27 @@ class PluginAPI:
             if os.path.exists(json_path):
                 ctk.set_default_color_theme(json_path)
     def show_info(self, text):
-        showinfo("Info", text)
-
+        showinfo('Info', text)
     def show_error(self, text):
-        showinfo("Error", text)
-
+        showinfo('Error', text)
     def log(self, text):
-        print(f"[PLUGIN LOG] {text}")
-    
+        print(f'[PLUGIN LOG] {text}')
+    def run_async(self, cmd, withdaemon=bool):
+        thread = threading.Thread(target=cmd, daemon=withdaemon)
+        return thread
+    def Widget_Frame(self, parent, **kwargs):
+        fr = ctk.CTkFrame(parent, **kwargs)
+        return fr
+    def Widget_Label(self, parent, text, font=('', 13), **kwargs):
+        lbl = ctk.CTkLabel(parent, text=text, font=font, **kwargs)
+        return lbl
+    def Widget_Button(self, parent, text, cmd, font=('', 13), **kwargs):
+        btn = ctk.CTkButton(parent, text=text, command=cmd, font=font, **kwargs)
+        return btn
+    def Widget_Other(self, parent, widget, **kwargs):
+        widg = widget(parent, **kwargs)
+        return widg
+
 
 class App(ctk.CTk):
     def __init__(self, title, geometry):
@@ -104,29 +119,33 @@ class App(ctk.CTk):
                 folder_path = os.path.join(plugin_dir, folder)
                 if not os.path.isdir(folder_path):
                     continue
-                logic_path = os.path.join(folder_path, "logic.py")
+                logic_path = os.path.join(folder_path, 'logic.py')
                 if os.path.exists(logic_path):
                     name = folder
                     try:
                         spec = importlib.util.spec_from_file_location(name, logic_path)
                         mod = importlib.util.module_from_spec(spec)
                         spec.loader.exec_module(mod)
-                        meta_path = os.path.join(folder_path, "metadata.json")
+                        meta_path = os.path.join(folder_path, 'metadata.json')
                         metadata = None
                         if os.path.exists(meta_path):
-                            with open(meta_path, "r") as f:
+                            with open(meta_path, 'r') as f:
                                 metadata = json.load(f)
-                        if hasattr(mod, "action"):
-                            plugins.append({"module": mod, "meta": metadata})
+                        if hasattr(mod, 'action'):
+                            plugins.append({'module': mod, 'meta': metadata})
                     except Exception as e:
-                        print(f"[PLUGIN ERROR] Failed to load '{name}': {e}")
+                        print(f'[PLUGIN ERROR] Failed to load \'{name}\': {e}')
 
             return plugins
-    
+        
+        global PLUGINS_LIST
         PLUGINS_LIST = __load_plugins()
+        editor_api = PluginAPI(self.textbox, self)
+        self.plugins_list = PLUGINS_LIST
 
         self.path = None
         self.font_size = 14
+        self.modified = False
 
         def write_to_recent_files():
             if CONFIGURATION['recent_files']['enabled']:
@@ -154,21 +173,32 @@ class App(ctk.CTk):
 
         def save_as(event=None):
             self.path = asksaveasfilename(filetypes=[('Text files', '.txt'), ('Other', '.*.*')], defaultextension='.txt')
-            with open(self.path, 'w') as file:
-                file.write(self.textbox.get('1.0'))
-            self.title(f'kPad - {self.path}')
+            if not self.path:
+                return
+            try:
+                with open(self.path, 'w', encoding='utf-8') as file:
+                    file.write(self.textbox.get('1.0', 'end-1c'))
+                self.title(f'kPad - {self.path}')
+                self.modified = False
+                if self.title().endswith('*'):
+                    self.title(self.title()[:-1])
+            except Exception:
+                return
 
         def save_file(event=None):
             if not self.path:
                 save_as()
+                return
             with open(self.path, 'w', encoding='utf-8') as f:
                 f.write(self.textbox.get('1.0', 'end-1c'))
-            self.title(f'kPad - {self.path}')
+            self.modified = False
+            if self.title().endswith('*'):
+                self.title(self.title()[:-1])
 
         
         def open_from_file(event=None, path=None):
             if not path:
-                self.path = askopenfilename(filetypes=[('Text files', '.txt'), ('kPad notefile', '.kpad')], defaultextension='.txt')
+                self.path = askopenfilename(filetypes=[('Text files', '.txt'), ('All files', '*.*')], defaultextension='.txt')
             if self.path:
                 self.textbox.delete('1.0', 'end')
                 with open(self.path, 'r') as file:
@@ -245,27 +275,27 @@ class App(ctk.CTk):
         
         def auto_indent(event):
             tb = event.widget
-            cursor_index = tb.index("insert")
+            cursor_index = tb.index('insert')
             line_number = int(cursor_index.split('.')[0])
             indent = 0
             prev_line_num = line_number - 1
             while prev_line_num > 0:
-                prev_line_text = tb.get(f"{prev_line_num}.0", f"{prev_line_num}.end")
-                if prev_line_text.strip() != "":
+                prev_line_text = tb.get(f'{prev_line_num}.0', f'{prev_line_num}.end')
+                if prev_line_text.strip() != '':
                     indent = len(prev_line_text) - len(prev_line_text.lstrip(' '))
                     if prev_line_text.rstrip().endswith((':', '{')):
                         indent += 4
                     break
                 prev_line_num -= 1
-            current_line_text = tb.get(f"{line_number}.0", f"{line_number}.end")
-            if current_line_text.strip() == "":
-                tb.insert("insert", " " * indent)
-            tb.insert("insert", "\n" + " " * indent)
-            return "break"
+            current_line_text = tb.get(f'{line_number}.0', f'{line_number}.end')
+            if current_line_text.strip() == '':
+                tb.insert('insert', ' ' * indent)
+            tb.insert('insert', '\n' + ' ' * indent)
+            return 'break'
                 
         def add_second_char(char, event=None):
             def insert_char():
-                cursor = self.textbox.index("insert")
+                cursor = self.textbox.index('insert')
                 if char == '{':
                     self.textbox.insert(cursor, '}')
                 elif char == '[':
@@ -301,15 +331,14 @@ class App(ctk.CTk):
         view_menu.add_separator()
         view_menu.add_checkbutton(label='Word Wrap...', onvalue=True, variable=word_wrap_var, command=toggle_word_wrap)
         menu.add_cascade(label='View', menu=view_menu)
-        self.plugins_menu = Menu(menu, tearoff=0)
-        menu.add_cascade(label="Plugins", menu=self.plugins_menu)
-
-        editor_api = PluginAPI(self.textbox, self)
-        self.plugins_list = PLUGINS_LIST
+        plugins_menu = Menu(menu, tearoff=0)
+        menu.add_cascade(label='Plugins', menu=plugins_menu)
         for plugin in self.plugins_list:
-            meta = plugin["meta"]
-            name = meta.get("name") if meta else plugin["module"].__name__
-            self.plugins_menu.add_command(label=name, command=lambda p=plugin: p["module"].action(editor_api))
+            meta = plugin['meta']
+            name = meta.get('name') if meta else plugin['module'].__name__
+            plugins_menu.add_command(label=name, command=lambda p=plugin: p['module'].action(editor_api))
+        plugins_menu.add_separator()
+        plugins_menu.add_command(label='Show Plugin Information...', command=lambda: PluginsInfo(self.plugins_list))
 
         self.configure(menu=menu)
 
@@ -321,10 +350,6 @@ class App(ctk.CTk):
             line, col = map(int, pos.split('.'))
             chars = len(self.textbox.get('1.0', 'end-1c'))
             self.stats_line_col.configure(text=f'Ln: {line}  Col: {col + 1}  Ch: {chars}')
-            if self.path != None:
-                self.title(f'kPad - *{self.path}')
-            else:
-                self.title('kPad - *Untitled')
 
         self.title(title)
         self.geometry(f'{geometry[0]}x{geometry[1]}')
@@ -339,12 +364,11 @@ class App(ctk.CTk):
         self.textbox.bind('<ButtonRelease>', update_cursor_info)
         self.textbox.bind('<Return>', auto_indent)
 
-        # Cross-platform key bindings
         system = platform.system()
-        if system == "Darwin":
-            mod = "Command"
+        if system == 'Darwin':
+            mod = 'Command'
         else:
-            mod = "Control"
+            mod = 'Control'
 
         self.bind(f'<{mod}-l>', go_to_line)
         self.bind(f'<{mod}-s>', save_file)
@@ -362,8 +386,66 @@ class App(ctk.CTk):
         self.stats_line_col = ctk.CTkLabel(self.stats_text_frame, text='Ln: 1 Col: 1 Ch: 0')
         self.stats_line_col.pack(side=ctk.RIGHT)
 
-        self.textbox.pack(fill='both', expand=True)
-        self.protocol('WM_DELETE_WINDOW', lambda: [save_file(), save_config(), self.destroy()])
+        def on_text_change(event=None):
+            if not self.modified:
+                self.modified = True
+                if not self.title().endswith('*'):
+                    self.title(self.title() + '*')
 
+        self.textbox.bind('<Key>', on_text_change, add='+')
+        self.textbox.bind('<<Paste>>', on_text_change, add='+')
+        self.textbox.bind('<<Cut>>', on_text_change, add='+')
+        self.textbox.bind('<Delete>', on_text_change, add='+')
+
+        def _on_quit_():
+            if self.modified:
+                result = askyesnocancel('Quit', 'Save changes before quitting?')
+                if result is True:
+                    if self.path:
+                        save_file()
+                    else:
+                        save_as()
+                elif result is None:
+                    return
+            save_config()
+            self.destroy()
+
+        for plugin in self.plugins_list:
+            name = plugin.get('meta', {}).get('name', plugin['module'].__name__)
+            if name in CONFIGURATION.get('auto_start_plugins', []):
+                try:
+                    plugin['module'].action(editor_api)
+                except Exception as e:
+                    print(f"[PLUGIN ERROR] Auto-start failed for {name}: {e}")
+
+        self.textbox.pack(fill='both', expand=True)
+        self.protocol('WM_DELETE_WINDOW', _on_quit_)
+
+class PluginsInfo(ctk.CTkToplevel):
+    def __init__(self, plugins_list):
+        super().__init__()
+
+        def make_separator():
+            ctk.CTkFrame(self.main, height=3).pack(fill='x', pady=5, padx=10)
+
+        self.title('Plugin Info')
+        self.geometry(f'500x600')
+        
+        self.main = ctk.CTkScrollableFrame(self)
+
+        for plugin in plugins_list:
+            meta = plugin.get('meta', {})
+            name = meta.get('name', plugin['module'].__name__)
+            author = meta.get('author', 'Unknown')
+            version = meta.get('version', '1.0')
+            desc = meta.get('desc', 'No description available.')
+
+            ctk.CTkLabel(self.main, text=f'Name: {name}', font=ctk.CTkFont(weight='bold')).pack(anchor='w')
+            ctk.CTkLabel(self.main, text=f'Author: {author}').pack(anchor='w')
+            ctk.CTkLabel(self.main, text=f'Version: {version}').pack(anchor='w')
+            ctk.CTkLabel(self.main, text=f'Description: {desc}', wraplength=360, justify='left').pack(anchor='w', pady=(0,5))
+            ctk.CTkButton(self.main, text=f'Mark {name} as Autostarter...', command=lambda n=name: CONFIGURATION['auto_start_plugins'].append(n)).pack(pady=5, anchor='w')
+            make_separator()
+        self.main.pack(fill='both', expand='True')
 
 App('kPad - Untitled', CONFIGURATION['window_geometry']).mainloop()
