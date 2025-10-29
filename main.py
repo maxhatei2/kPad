@@ -5,6 +5,7 @@ from tkinter.messagebox import showinfo, askyesno, askyesnocancel
 from tkinter import simpledialog
 import time, threading
 import os, json, platform
+import venv, sys
 
 # ██╗░░██╗██████╗░░█████╗░██████╗░
 # ██║░██╔╝██╔══██╗██╔══██╗██╔══██╗
@@ -12,17 +13,21 @@ import os, json, platform
 # ██╔═██╗░██╔═══╝░██╔══██║██║░░██║
 # ██║░╚██╗██║░░░░░██║░░██║██████╔╝
 # ╚═╝░░╚═╝╚═╝░░░░░╚═╝░░╚═╝╚═════╝░
-# Version 1.2.1      [SOURCE CODE]
+# Version 1.2.2      [SOURCE CODE]
+
 
 if platform.system() == 'Darwin':
     config_dir = os.path.expanduser('~/Library/Application Support/kPad')
     plugin_dir = os.path.expanduser(f'{config_dir}/plugins')
+    plugin_env_path = os.path.expanduser("~/Library/Application Support/kPad/plugin-env")
 elif platform.system() == 'Windows':
     config_dir = os.path.join(os.getenv('APPDATA'), 'kPad')
     plugin_dir = os.path.join(os.getenv('APPDATA'), 'kPad', 'Plugins')
+    plugin_env_path = os.path.join(os.getenv('APPDATA', 'kPad', 'Plugins', 'plugin_env'))
 else:
     config_dir = os.path.expanduser('~/.config/kpad')
     plugin_dir = os.path.expanduser(f'{config_dir}/plugins')
+    plugin_env_path = os.path.expanduser("~/Library/Application Support/kPad/plugin-env")
 os.makedirs(config_dir, exist_ok=True)
 os.makedirs(plugin_dir, exist_ok=True)
 CONFIG_PATH = os.path.join(config_dir, 'config.json')
@@ -40,6 +45,10 @@ else:
         'recent_files': {'enabled': True, 'keep_recent_files_count': 5, 'recent_file_paths': []},
         'auto_start_plugins': []
 }
+    
+if not os.path.exists(plugin_env_path):
+    venv.create(plugin_env_path, with_pip=True)
+os.environ["KPAD_PLUGIN_ENV"] = plugin_env_path
 
 _fonts = ['Menlo', 'Monaco', 'Helvetica', 'Arial', 'Times New Roman', 'Georgia', 'Avenir', 'Baskerville', 'Futura', 'Verdana', 'Gill Sans', 'Courier', 'Optima', 'American Typewriter']
 
@@ -64,7 +73,6 @@ class PluginAPI:
                 callback(event)
             except TypeError:
                 callback()
-            return 'break'
         self.textbox.bind(sequence, wrapper)
     def get_plugin_path(self, plugin_name):
         return os.path.join(plugin_dir, plugin_name)
@@ -101,6 +109,32 @@ class PluginAPI:
     def Widget_Other(self, parent, widget, **kwargs):
         widg = widget(parent, **kwargs)
         return widg
+    def prepare_for_external_libs(self):
+        'Use this when external libs are required for a plugin at the top of the action() function.'
+        ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+        env = os.getenv("KPAD_PLUGIN_ENV")
+        sys.path.append(os.path.join(env, "lib", f"python{ver}", "site-packages"))
+    def get_selected_text(self):
+        try:
+            return self.textbox.get('sel.first', 'sel.last')
+        except:
+            return ''
+    def add_text_tag(self, tag_name, **options):
+        """Create or update a text tag (foreground, background, font, etc.)"""
+        self.textbox.tag_config(tag_name, **options)
+
+    def tag_text(self, tag_name, start, end):
+        """Apply a tag to a range of text."""
+        self.textbox.tag_add(tag_name, start, end)
+
+    def remove_tag(self, tag_name, start="1.0", end="end"):
+        """Remove a tag from a range."""
+        self.textbox.tag_remove(tag_name, start, end)
+
+    def clear_all_tags(self):
+        """Remove all tags from the textbox."""
+        for tag in self.textbox.tag_names():
+            self.textbox.tag_remove(tag, "1.0", "end")
 
 
 class App(ctk.CTk):
