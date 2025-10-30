@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Classes\kpad]
+@="URL:kPad Protocol"
+"URL Protocol"=""
+
+[HKEY_CURRENT_USER\Software\Classes\kpad\shell\open\command]
+@="\"C:\\Users\\%USERNAME%\\AppData\\Local\\kPad\\kPad-Windows_x86_64.exe\" \"%1\""

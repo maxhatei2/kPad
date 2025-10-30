@@ -1,11 +1,21 @@
 import customtkinter as ctk
 from tkinter.filedialog import asksaveasfilename, askopenfilename
 from tkinter import Menu
-from tkinter.messagebox import showinfo, askyesno, askyesnocancel
+from tkinter.messagebox import showinfo, askyesno, askyesnocancel, showerror
 from tkinter import simpledialog
-import time, threading
-import os, json, platform
-import venv, sys
+import time, threading, shutil
+import os, json, platform, tempfile
+import venv, sys, urllib.parse, urllib.request
+from io import BytesIO
+from zipfile import ZipFile
+
+VERSION = '1.3.67'
+ONL_VER_URL = 'https://raw.githubusercontent.com/maxhatei2/kPad/refs/heads/main/.kv'
+DOWNLOAD_URLS = {
+    ('Darwin', 'arm64'): 'https://github.com/maxhatei2/kPad/releases/latest/kPad-mac_arm64.zip',
+    ('Darwin', 'x86_64'): 'https://github.com/maxhatei2/kPad/releases/latest/kPad-mac_x86_64.zip',
+    (('Windows', 'arm64'), ('Windows', 'x86_64')): 'https://github.com/maxhatei2/kPad/releases/latest/kPad-Windows_x86_64.exe.zip'
+}
 
 # ██╗░░██╗██████╗░░█████╗░██████╗░
 # ██║░██╔╝██╔══██╗██╔══██╗██╔══██╗
@@ -13,7 +23,7 @@ import venv, sys
 # ██╔═██╗░██╔═══╝░██╔══██║██║░░██║
 # ██║░╚██╗██║░░░░░██║░░██║██████╔╝
 # ╚═╝░░╚═╝╚═╝░░░░░╚═╝░░╚═╝╚═════╝░
-# Version 1.2.2      [SOURCE CODE]
+# Version 1.3.0      [SOURCE CODE]
 
 
 if platform.system() == 'Darwin':
@@ -51,6 +61,34 @@ if not os.path.exists(plugin_env_path):
 os.environ["KPAD_PLUGIN_ENV"] = plugin_env_path
 
 _fonts = ['Menlo', 'Monaco', 'Helvetica', 'Arial', 'Times New Roman', 'Georgia', 'Avenir', 'Baskerville', 'Futura', 'Verdana', 'Gill Sans', 'Courier', 'Optima', 'American Typewriter']
+
+try:
+    PROTOCOL_URL = sys.argv[1]
+    parsed = urllib.parse.urlparse(PROTOCOL_URL)
+    if parsed.netloc == 'InstallPlugin':
+        url = parsed.query.split('=')[1]
+        try:
+            response = urllib.request.urlopen(url)
+            data = response.read()
+            with ZipFile(BytesIO(data)) as z:
+                z.extract(plugin_dir)
+            showinfo('Plugin installed', 'Plugin was installed from the link. If everything is correct, you\'ll find it to run in the \'Plugins\' tab to run.')
+        except Exception as e: showerror('Error while installing plugin', f'Error while installing the plugin: -> {e} <- Check your Internet connection or the URL in the link.')
+except: pass
+
+def AutoUpdate(gimme_your_self):
+    try:
+        online_ver = urllib.request.urlopen(ONL_VER_URL).read().decode().strip()
+        if online_ver != VERSION:
+            to_update = askyesno('Update available!', f'A new update to kPad {online_ver}, is available to install! Do it now?')
+            if to_update:
+                DownloadUpdateWindow(gimme_your_self)
+            else:
+                gimme_your_self.stats_line_col.configure(text='User rejected update | Ln: 1 Col: 1 Ch: 0')
+        else:
+            gimme_your_self.stats_line_col.configure(text='Up to date | Ln: 1 Col: 1 Ch: 0')
+    except Exception as e: 
+            gimme_your_self.stats_line_col.configure(text=f'⚠️ Warning! Could not check for updates: {e} | Ln: 1 Col: 1 Ch: 0')
 
 class PluginAPI:
     def __init__(self, textbox, appinstance):
@@ -140,6 +178,8 @@ class PluginAPI:
 class App(ctk.CTk):
     def __init__(self, title, geometry):
         super().__init__()
+
+        self.after(1, lambda: threading.Thread(AutoUpdate(gimme_your_self=self)))
 
         import importlib.util
 
@@ -482,4 +522,109 @@ class PluginsInfo(ctk.CTkToplevel):
             make_separator()
         self.main.pack(fill='both', expand='True')
 
-App('kPad - Untitled', CONFIGURATION['window_geometry']).mainloop()
+class DownloadUpdateWindow(ctk.CTkToplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+
+        syst = platform.system()
+        arch = platform.machine().lower()
+        if arch in ("x86_64", "amd64"):
+            arch = "x86_64"
+        elif arch in ("arm64", "aarch64"):
+            arch = "arm64"
+
+        
+        def create_start_menu_shortcut(exe_path, name="kPad"):
+            start_menu = os.path.join(os.environ["APPDATA"], r"Microsoft\Windows\Start Menu\Programs")
+            shortcut_path = os.path.join(start_menu, f"{name}.lnk")
+            ps_cmd = f'''
+            $WshShell = New-Object -ComObject WScript.Shell;
+            $Shortcut = $WshShell.CreateShortcut("{shortcut_path}");
+            $Shortcut.TargetPath = "{exe_path}";
+            $Shortcut.WorkingDirectory = "{os.path.dirname(exe_path)}";
+            $Shortcut.Save();
+        '''
+            os.system(f'powershell -Command "{ps_cmd}"')
+
+        def Download():
+            syst = platform.system()
+            arch = platform.machine().lower()
+            if arch in ("x86_64", "amd64"):
+                arch = "x86_64"
+            elif arch in ("arm64", "aarch64"):
+                arch = "arm64"
+            requiredUrl = DOWNLOAD_URLS.get((syst, arch))
+            if not requiredUrl:
+                showerror("Error", f"No download available for {syst} {arch}")
+                return
+            if syst == 'Darwin':
+                try:
+                    data = urllib.request.urlopen(requiredUrl).read()
+                    with tempfile.TemporaryDirectory() as tmp_outer:
+                        outer_zip_path = os.path.join(tmp_outer, os.path.basename(requiredUrl))
+                        with open(outer_zip_path, "wb") as f:
+                            f.write(data)
+                        with ZipFile(outer_zip_path) as outer_zip:
+                            outer_zip.extractall(tmp_outer)
+                        inner_zip_path = None
+                        for root, _, files in os.walk(tmp_outer):
+                            for file in files:
+                                if file.endswith(".zip"):
+                                    inner_zip_path = os.path.join(root, file)
+                                    break
+                            if inner_zip_path:
+                                break
+                        if not inner_zip_path:
+                            showerror("Error", "Could not find inner zip containing the .app")
+                            self.destroy()
+                            return
+                        with tempfile.TemporaryDirectory() as tmp_inner:
+                            with ZipFile(inner_zip_path) as inner_zip:
+                                inner_zip.extractall(tmp_inner)
+                            app_folder = None
+                            for item in os.listdir(tmp_inner):
+                                if item.endswith(".app"):
+                                    app_folder = os.path.join(tmp_inner, item)
+                                    break
+                            if not app_folder:
+                                showerror("Error", "Could not find .app inside the inner zip")
+                                self.destroy()
+                                return
+                            dest = "/Applications/kPad.app"
+                            if os.path.exists(dest):
+                                shutil.rmtree(dest)
+                            shutil.move(app_folder, dest)
+                            showinfo("Update Installed", f"kPad installed to {dest}")
+                except Exception as e:
+                    showerror("Error", f"[Errno EXCEPTION]: Failed to install update: {e}")
+                    self.destroy()
+                    return
+            elif syst == 'Windows':
+                dest_folder = os.path.join(os.getenv("LOCALAPPDATA"), "kPad")
+                os.makedirs(dest_folder, exist_ok=True)
+                dest_file = os.path.join(dest_folder, "kPad.exe")
+                try:
+                    data = urllib.request.urlopen(requiredUrl).read()
+                    with tempfile.TemporaryDirectory() as tmp:
+                        with ZipFile(BytesIO(data)) as zip:
+                            zip.extract(tmp)
+                            shutil.move(f'{tmp}/kPad-Windows_x86_64/kPad-Windows_x86_64.exe', dest_file)
+                            create_start_menu_shortcut(dest_file, f'kPad')
+                except Exception as e:
+                    showerror('Failed!', f'[Errno EXCEPTION]: {e}')
+                    self.destroy()
+                    return
+        
+        downloading_new_version = ctk.CTkLabel(self, text='Downloading update...')
+        downloading_new_version.pack()
+        this_might_etc = ctk.CTkLabel(self, text='This might take a bit, depending on your Internet connection. When done, the app will close.')
+        this_might_etc.pack()
+        load_pbar = ctk.CTkProgressBar(self, mode='indeterminate')
+        load_pbar.pack()
+        load_pbar.start()
+
+        self.after(1, Download)
+
+
+app = App('kPad - Untitled', CONFIGURATION['window_geometry'])
+app.mainloop()
