@@ -9,7 +9,7 @@ import venv, sys, urllib.parse, urllib.request
 from io import BytesIO
 from zipfile import ZipFile
 
-VERSION = '1.3.67'
+VERSION = '1.3.0'
 ONL_VER_URL = 'https://raw.githubusercontent.com/maxhatei2/kPad/refs/heads/main/.kv'
 DOWNLOAD_URLS = {
     ('Darwin', 'arm64'): 'https://github.com/maxhatei2/kPad/releases/latest/kPad-mac_arm64.zip',
@@ -157,6 +157,11 @@ class PluginAPI:
             return self.textbox.get('sel.first', 'sel.last')
         except:
             return ''
+    def get_selected_text_indexes(self):
+        try:
+            return (self.textbox.index('sel.first'), self.textbox.index('sel.last'))
+        except:
+            return None
     def add_text_tag(self, tag_name, **options):
         """Create or update a text tag (foreground, background, font, etc.)"""
         self.textbox.tag_config(tag_name, **options)
@@ -174,12 +179,11 @@ class PluginAPI:
         for tag in self.textbox.tag_names():
             self.textbox.tag_remove(tag, "1.0", "end")
 
-
 class App(ctk.CTk):
     def __init__(self, title, geometry):
         super().__init__()
 
-        self.after(1, lambda: threading.Thread(AutoUpdate(gimme_your_self=self)))
+        self.after(1, lambda: threading.Thread(target=AutoUpdate, args=(self,), daemon=True).start())
 
         import importlib.util
 
@@ -346,26 +350,6 @@ class App(ctk.CTk):
             CONFIGURATION['window_geometry'] = [self.winfo_width(), self.winfo_height()]
             with open(CONFIG_PATH, 'w') as f:
                 json.dump(CONFIGURATION, f, indent=4)
-        
-        def auto_indent(event):
-            tb = event.widget
-            cursor_index = tb.index('insert')
-            line_number = int(cursor_index.split('.')[0])
-            indent = 0
-            prev_line_num = line_number - 1
-            while prev_line_num > 0:
-                prev_line_text = tb.get(f'{prev_line_num}.0', f'{prev_line_num}.end')
-                if prev_line_text.strip() != '':
-                    indent = len(prev_line_text) - len(prev_line_text.lstrip(' '))
-                    if prev_line_text.rstrip().endswith((':', '{')):
-                        indent += 4
-                    break
-                prev_line_num -= 1
-            current_line_text = tb.get(f'{line_number}.0', f'{line_number}.end')
-            if current_line_text.strip() == '':
-                tb.insert('insert', ' ' * indent)
-            tb.insert('insert', '\n' + ' ' * indent)
-            return 'break'
                 
         def add_second_char(char, event=None):
             def insert_char():
@@ -436,7 +420,6 @@ class App(ctk.CTk):
 
         self.textbox.bind('<KeyRelease>', update_cursor_info)
         self.textbox.bind('<ButtonRelease>', update_cursor_info)
-        self.textbox.bind('<Return>', auto_indent)
 
         system = platform.system()
         if system == 'Darwin':
