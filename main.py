@@ -4,12 +4,13 @@ from tkinter import Menu
 from tkinter.messagebox import showinfo, askyesno, askyesnocancel, showerror
 from tkinter import simpledialog
 import time, threading, shutil
-import os, json, platform, tempfile
+import os, json, platform, tempfile, subprocess
 import venv, sys, urllib.parse, urllib.request
 from io import BytesIO
 from zipfile import ZipFile
+from tkinter import Listbox
 
-VERSION = '1.3.0'
+VERSION = '1.4.0'
 ONL_VER_URL = 'https://raw.githubusercontent.com/maxhatei2/kPad/refs/heads/main/.kv'
 DOWNLOAD_URLS = {
     ('Darwin', 'arm64'): 'https://github.com/maxhatei2/kPad/releases/latest/kPad-mac_arm64.zip',
@@ -17,13 +18,15 @@ DOWNLOAD_URLS = {
     (('Windows', 'arm64'), ('Windows', 'x86_64')): 'https://github.com/maxhatei2/kPad/releases/latest/kPad-Windows_x86_64.exe.zip'
 }
 
+
+
 # ██╗░░██╗██████╗░░█████╗░██████╗░
 # ██║░██╔╝██╔══██╗██╔══██╗██╔══██╗
 # █████═╝░██████╔╝███████║██║░░██║
 # ██╔═██╗░██╔═══╝░██╔══██║██║░░██║
 # ██║░╚██╗██║░░░░░██║░░██║██████╔╝
 # ╚═╝░░╚═╝╚═╝░░░░░╚═╝░░╚═╝╚═════╝░
-# Version 1.3.0      [SOURCE CODE]
+# Version 1.4.0      [SOURCE CODE]
 
 
 if platform.system() == 'Darwin':
@@ -53,7 +56,6 @@ else:
         'font_size': 14,
         'window_geometry': [500, 400],
         'recent_files': {'enabled': True, 'keep_recent_files_count': 5, 'recent_file_paths': []},
-        'auto_start_plugins': []
 }
     
 if not os.path.exists(plugin_env_path):
@@ -178,16 +180,39 @@ class PluginAPI:
         """Remove all tags from the textbox."""
         for tag in self.textbox.tag_names():
             self.textbox.tag_remove(tag, "1.0", "end")
+    
+    def add_command_entry(self, entry_name, command):
+        self._appinstance.appcmds['[PLUGIN ]' +entry_name] = command
 
 class App(ctk.CTk):
     def __init__(self, title, geometry):
         super().__init__()
 
+        self.appcmds = {
+            'Save': save_file,
+            'Open from file': open_from_file,
+            'Save as': save_as,
+            'New file': newfile,
+            'Open Plugin Folder': open_plugin_folder,
+            'Go To Line': go_to_line,    
+            'Toggle Theme': toggle_theme,
+            'Open Plugin Finder': lambda: PluginsInfo(self.plugins_list),
+            'Increment font size': increment_font_size,
+            'Decrement font size': decrement_font_size,
+            'Toggle word wrap': toggle_word_wrap,
+            'Save configuration': save_config,
+            'Go to start': go_to_start,
+            'Go to end': go_to_end
+        }
+
+        self.textbox = ctk.CTkTextbox(self, undo=CONFIGURATION['undo']['enabled'],
+                               autoseparators=CONFIGURATION['undo']['separate_edits_from_undos'],
+                               maxundo=CONFIGURATION['undo']['max_undo'])
+        self.textbox.pack(fill='both', expand=True)
+
         self.after(1, lambda: threading.Thread(target=AutoUpdate, args=(self,), daemon=True).start())
 
         import importlib.util
-
-        self.textbox = ctk.CTkTextbox(self, undo=CONFIGURATION['undo']['enabled'], autoseparators=CONFIGURATION['undo']['separate_edits_from_undos'], maxundo=CONFIGURATION['undo']['max_undo'])
 
         def __load_plugins():
             plugins = []
@@ -262,6 +287,15 @@ class App(ctk.CTk):
                     self.title(self.title()[:-1])
             except Exception:
                 return
+        
+        def open_plugin_folder():
+            x = platform.system()
+            if x == 'Darwin':
+                subprocess.call(["open", plugin_dir])
+            elif x == 'Windows':
+                subprocess.call(['explorer', plugin_dir])
+            else:
+                subprocess.call(['xdg-open', plugin_dir])
 
         def save_file(event=None):
             if not self.path:
@@ -289,6 +323,7 @@ class App(ctk.CTk):
         def set_font(font):
             self.font.configure(family=font)
             self.textbox.configure(font=self.font)
+    
 
         def autosave():
             while True:
@@ -434,6 +469,7 @@ class App(ctk.CTk):
         self.bind(f'<{mod}-n>', newfile)
         self.bind(f'<{mod}-equal>', increment_font_size)
         self.bind(f'<{mod}-minus>', decrement_font_size)
+        self.bind(f'<{mod}-k>', lambda event=None: FastCommand(self))
 
         self.textbox.bind('<Key>', handle_brackets)
 
@@ -477,6 +513,20 @@ class App(ctk.CTk):
 
         self.textbox.pack(fill='both', expand=True)
         self.protocol('WM_DELETE_WINDOW', _on_quit_)
+
+        self.save_file = save_file
+        self.open_from_file = open_from_file
+        self.save_as = save_as
+        self.newfile = newfile
+        self.open_plugin_folder = open_plugin_folder
+        self.toggle_theme = toggle_theme
+        self.go_to_line = go_to_line
+        self.incsize = increment_font_size
+        self.decsize = decrement_font_size
+        self.wordwrap = toggle_word_wrap
+        self.saveconf = save_config
+        self.gostart = go_to_start
+        self.goend = go_to_end
 
 class PluginsInfo(ctk.CTkToplevel):
     def __init__(self, plugins_list):
@@ -607,6 +657,75 @@ class DownloadUpdateWindow(ctk.CTkToplevel):
         load_pbar.start()
 
         self.after(1, Download)
+
+class FastCommand(ctk.CTkToplevel): 
+    def __init__(self, parent):
+        super().__init__()
+
+
+        self.overrideredirect(True)
+        self.after(10, lambda: self.attributes('-topmost', True))
+        self.title(' ')
+        self.geometry('300x200')
+
+        
+
+        results_box = Listbox(self, bg='#1D1D1D',
+                                    fg='white',
+                                    selectbackground='#FF8000',
+                                    selectforeground='white',
+                                    font=('JetBrains Mono', 12),
+                                    activestyle='none',
+                                    highlightthickness=0,
+                                    bd=0
+                                    )
+        results_box.pack(fill='both', side=ctk.BOTTOM)
+
+        COMMANDS = app.appcmds
+
+        def exit_window(event=None):
+            parent.textbox.focus()
+            self.destroy()
+         
+        def run_command(event=None):
+            selection = results_box.curselection()
+            if not selection:
+                return
+            sel = results_box.get(selection[0])
+            COMMANDS[sel]()
+            exit_window()
+        
+        def filter_(event=None):
+            query = command_entry.get().lower()
+            if not query == '' or query.split(' ') == '':
+                results_box.delete(0, "end")
+                for name in COMMANDS:
+                    if query in name.lower():
+                        results_box.insert("end", name)
+                if results_box.size() > 0:
+                    results_box.selection_set(0)
+            else:
+                results_box.delete(0, 'end')
+                for command in COMMANDS:
+                    results_box.insert('end', command)
+        
+        def run_filtering(event=None):
+            threading.Thread(target=filter_, daemon=True).start()
+
+
+        command_entry = ctk.CTkEntry(self, placeholder_text='Type a command or press Esc to exit...')
+        command_entry.pack(fill='x', side=ctk.TOP)
+        command_entry.focus()
+
+
+        for command in COMMANDS:
+            results_box.insert('end', command)
+
+        self.bind('<Escape>', exit_window)
+        results_box.bind('<Return>', run_command)
+        command_entry.bind('<KeyRelease>', run_filtering)
+        command_entry.bind('<Return>', run_command)
+
 
 
 app = App('kPad - Untitled', CONFIGURATION['window_geometry'])
