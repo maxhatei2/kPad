@@ -188,27 +188,21 @@ class App(ctk.CTk):
     def __init__(self, title, geometry):
         super().__init__()
 
-        self.appcmds = {
-            'Save': save_file,
-            'Open from file': open_from_file,
-            'Save as': save_as,
-            'New file': newfile,
-            'Open Plugin Folder': open_plugin_folder,
-            'Go To Line': go_to_line,    
-            'Toggle Theme': toggle_theme,
-            'Open Plugin Finder': lambda: PluginsInfo(self.plugins_list),
-            'Increment font size': increment_font_size,
-            'Decrement font size': decrement_font_size,
-            'Toggle word wrap': toggle_word_wrap,
-            'Save configuration': save_config,
-            'Go to start': go_to_start,
-            'Go to end': go_to_end
-        }
+        self._Textboxes = []
+        self._TabPaths = []
+        self.tab_names = ['Untitled']
 
-        self.textbox = ctk.CTkTextbox(self, undo=CONFIGURATION['undo']['enabled'],
+        model_textbox = ctk.CTkTextbox(self, undo=CONFIGURATION['undo']['enabled'],
                                autoseparators=CONFIGURATION['undo']['separate_edits_from_undos'],
                                maxundo=CONFIGURATION['undo']['max_undo'])
-        self.textbox.pack(fill='both', expand=True)
+        
+        self.textbox = model_textbox
+
+        self._Textboxes.append(model_textbox)
+        self._TabPaths.append(None)
+
+        self.tabs = ctk.CTkSegmentedButton(self, values=['Untitled'])
+        self.tabs.pack(fill='x', side=ctk.TOP)
 
         self.after(1, lambda: threading.Thread(target=AutoUpdate, args=(self,), daemon=True).start())
 
@@ -246,23 +240,86 @@ class App(ctk.CTk):
         editor_api = PluginAPI(self.textbox, self)
         self.plugins_list = PLUGINS_LIST
 
-        self.path = None
+        self._TabPaths = [None]
         self.font_size = 14
         self.modified = False
+        index = self.tabs.index(self.tab_names[0])
 
         def write_to_recent_files():
             if CONFIGURATION['recent_files']['enabled']:
                 if len(CONFIGURATION['recent_files']['recent_file_paths']) >= CONFIGURATION['recent_files']['keep_recent_files_count']:
                     del CONFIGURATION['recent_files']['recent_file_paths'][0]
-                    CONFIGURATION['recent_files']['recent_file_paths'].append(self.path)
+                    CONFIGURATION['recent_files']['recent_file_paths'].append(self._TabPaths[index])
                 else:
-                    CONFIGURATION['recent_files']['recent_file_paths'].append(self.path)
+                    CONFIGURATION['recent_files']['recent_file_paths'].append(self._TabPaths[index])
+
+        def newtab(event=None, file_path=None):
+            new_textbox = ctk.CTkTextbox(
+                self, 
+                undo=CONFIGURATION['undo']['enabled'],
+                autoseparators=CONFIGURATION['undo']['separate_edits_from_undos'],
+                maxundo=CONFIGURATION['undo']['max_undo']
+            )
+            for tb in self._Textboxes:
+                tb.pack_forget()
+            self._Textboxes.append(new_textbox)
+            self._TabPaths.append(file_path or None)
+            if file_path and os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    new_textbox.insert('1.0', f.read())
+            tab_name = file_path or f'Untitled {len(self._Textboxes)}'
+            self.tab_names.append(tab_name)
+            self.tabs.configure(values=self.tab_names)
+            self.tabs.set(tab_name)
+            new_textbox.pack(fill='both', expand=True)
+            self.textbox = new_textbox
+
+        def on_tab_selected(value):
+            nonlocal index
+            for tb in self._Textboxes:
+                tb.pack_forget()
+            index = self.tab_names.index(value)
+            self._Textboxes[index].pack(fill='both', expand=True)
+            self._TabPaths[index] = self._TabPaths[index]
+            self.textbox = self._Textboxes[index]
+
+        def delete_tab(index):
+            tb = self._Textboxes.pop(index)
+            tb.pack_forget()
+            self._TabPaths.pop(index)
+            self.tab_names.pop(index)
+            new_index = max(0, index - 1)
+            if not self._Textboxes:
+                new_textbox = ctk.CTkTextbox(self,
+                                            undo=CONFIGURATION['undo']['enabled'],
+                                            autoseparators=CONFIGURATION['undo']['separate_edits_from_undos'],
+                                            maxundo=CONFIGURATION['undo']['max_undo'])
+                self._Textboxes.append(new_textbox)
+                self._TabPaths.append(None)
+                self.tab_names.append("Untitled")
+                new_textbox.pack(fill='both', expand=True)
+                self.tabs.configure(values=self.tab_names)
+                self.tabs.set("Untitled")
+                self.textbox = new_textbox
+                self.textbox.focus()
+                return
+            self.tabs.set(self.tab_names[new_index])
+            on_tab_selected(self.tab_names[new_index])
+            self.tabs.configure(values=self.tab_names)
+
+        def __get_values_and_delete(event=None):
+            value = self.tabs.get()
+            index = self.tab_names.index(value)
+            delete_tab(index)
+
+
+        self.tabs.configure(command=on_tab_selected)
 
 
         def newfile(event=None):
             if not '*' in self.title()[7]:
                 self.title('kPad - Untitled')
-                self.path = None
+                self._TabPaths[index] = None
                 self.textbox.delete('1.0', 'end')
             else:
                 ask = askyesno('File unsaved!', 'Do you want to save your file before making a new one?')
@@ -270,18 +327,18 @@ class App(ctk.CTk):
                     save_file()
                 else:
                     self.title('kPad - Untitled')
-                    self.path = None
+                    self._TabPaths[index] = None
                     self.textbox.delete('1.0', 'end')
                     
 
         def save_as(event=None):
-            self.path = asksaveasfilename(filetypes=[('Text files', '.txt'), ('Other', '.*.*')], defaultextension='.txt')
-            if not self.path:
+            self._TabPaths[index] = asksaveasfilename(filetypes=[('Text files', '.txt'), ('Other', '.*.*')], defaultextension='.txt')
+            if not self._TabPaths[index]:
                 return
             try:
-                with open(self.path, 'w', encoding='utf-8') as file:
+                with open(self._TabPaths[index], 'w', encoding='utf-8') as file:
                     file.write(self.textbox.get('1.0', 'end-1c'))
-                self.title(f'kPad - {self.path}')
+                self.title(f'kPad - {self._TabPaths[index]}')
                 self.modified = False
                 if self.title().endswith('*'):
                     self.title(self.title()[:-1])
@@ -298,10 +355,10 @@ class App(ctk.CTk):
                 subprocess.call(['xdg-open', plugin_dir])
 
         def save_file(event=None):
-            if not self.path:
+            if not self._TabPaths[index]:
                 save_as()
                 return
-            with open(self.path, 'w', encoding='utf-8') as f:
+            with open(self._TabPaths[index], 'w', encoding='utf-8') as f:
                 f.write(self.textbox.get('1.0', 'end-1c'))
             self.modified = False
             if self.title().endswith('*'):
@@ -310,10 +367,10 @@ class App(ctk.CTk):
         
         def open_from_file(event=None, path=None):
             if not path:
-                self.path = askopenfilename(filetypes=[('Text files', '.txt'), ('All files', '*.*')], defaultextension='.txt')
-            if self.path:
+                self._TabPaths[index] = askopenfilename(filetypes=[('Text files', '.txt'), ('All files', '*.*')], defaultextension='.txt')
+            if self._TabPaths[index]:
                 self.textbox.delete('1.0', 'end')
-                with open(self.path, 'r') as file:
+                with open(self._TabPaths[index], 'r') as file:
                     self.textbox.insert('1.0', file.read())
                 write_to_recent_files()
                 print(CONFIGURATION['recent_files']['recent_file_paths'])
@@ -328,7 +385,13 @@ class App(ctk.CTk):
         def autosave():
             while True:
                 if CONFIGURATION['auto_save']['enabled']:
-                    if self.path and 'Untitled' not in self.title():
+                    current_tab_name = self.tabs.get()
+                    try:
+                        current_index = self.tab_names.index(current_tab_name)
+                    except ValueError:
+                        time.sleep(CONFIGURATION['auto_save']['time_until_next_save'])
+                        continue
+                    if self._TabPaths[current_index] and 'Untitled' not in self.title():
                         save_file()
                 time.sleep(CONFIGURATION['auto_save']['time_until_next_save'])
             
@@ -426,10 +489,6 @@ class App(ctk.CTk):
         menu.add_cascade(label='View', menu=view_menu)
         plugins_menu = Menu(menu, tearoff=0)
         menu.add_cascade(label='Plugins', menu=plugins_menu)
-        for plugin in self.plugins_list:
-            meta = plugin['meta']
-            name = meta.get('name') if meta else plugin['module'].__name__
-            plugins_menu.add_command(label=name, command=lambda p=plugin: p['module'].action(editor_api))
         plugins_menu.add_separator()
         plugins_menu.add_command(label='Show Plugin Information...', command=lambda: PluginsInfo(self.plugins_list))
 
@@ -466,10 +525,11 @@ class App(ctk.CTk):
         self.bind(f'<{mod}-s>', save_file)
         self.bind(f'<{mod}-o>', open_from_file)
         self.bind(f'<{mod}-t>', toggle_theme)
-        self.bind(f'<{mod}-n>', newfile)
+        self.bind(f'<{mod}-n>', lambda event=None: newtab())
         self.bind(f'<{mod}-equal>', increment_font_size)
         self.bind(f'<{mod}-minus>', decrement_font_size)
         self.bind(f'<{mod}-k>', lambda event=None: FastCommand(self))
+        self.bind(f'<{mod}-e>', __get_values_and_delete)
 
         self.textbox.bind('<Key>', handle_brackets)
 
@@ -494,7 +554,7 @@ class App(ctk.CTk):
             if self.modified:
                 result = askyesnocancel('Quit', 'Save changes before quitting?')
                 if result is True:
-                    if self.path:
+                    if self._TabPaths[index]:
                         save_file()
                     else:
                         save_as()
@@ -503,6 +563,27 @@ class App(ctk.CTk):
             save_config()
             self.destroy()
 
+        self.textbox.pack(fill='both', expand=True)
+        self.protocol('WM_DELETE_WINDOW', _on_quit_)
+
+        # Define appcmds BEFORE plugin auto-start so plugins can use it
+        self.appcmds = {
+            'Save': save_file,
+            'Open from file': open_from_file,
+            'Save as': save_as,
+            'New file': newfile,
+            'Open Plugin Folder': open_plugin_folder,
+            'Go To Line': go_to_line,
+            'Toggle Theme': toggle_theme,
+            'Open Plugin Finder': lambda: PluginsInfo(self.plugins_list),
+            'Increment font size': increment_font_size,
+            'Decrement font size': decrement_font_size,
+            'Toggle word wrap': toggle_word_wrap,
+            'Save configuration': save_config,
+            'Go to start': go_to_start,
+            'Go to end': go_to_end
+        }
+
         for plugin in self.plugins_list:
             name = plugin.get('meta', {}).get('name', plugin['module'].__name__)
             if name in CONFIGURATION.get('auto_start_plugins', []):
@@ -510,9 +591,6 @@ class App(ctk.CTk):
                     plugin['module'].action(editor_api)
                 except Exception as e:
                     print(f"[PLUGIN ERROR] Auto-start failed for {name}: {e}")
-
-        self.textbox.pack(fill='both', expand=True)
-        self.protocol('WM_DELETE_WINDOW', _on_quit_)
 
         self.save_file = save_file
         self.open_from_file = open_from_file
@@ -527,6 +605,12 @@ class App(ctk.CTk):
         self.saveconf = save_config
         self.gostart = go_to_start
         self.goend = go_to_end
+
+
+        for plugin in self.plugins_list:
+            meta = plugin['meta']
+            name = meta.get('name') if meta else plugin['module'].__name__
+            plugins_menu.add_command(label=name, command=lambda p=plugin: p['module'].action(editor_api))
 
 class PluginsInfo(ctk.CTkToplevel):
     def __init__(self, plugins_list):
@@ -681,7 +765,7 @@ class FastCommand(ctk.CTkToplevel):
                                     )
         results_box.pack(fill='both', side=ctk.BOTTOM)
 
-        COMMANDS = app.appcmds
+        COMMANDS = parent.appcmds
 
         def exit_window(event=None):
             parent.textbox.focus()
@@ -697,17 +781,17 @@ class FastCommand(ctk.CTkToplevel):
         
         def filter_(event=None):
             query = command_entry.get().lower()
-            if not query == '' or query.split(' ') == '':
-                results_box.delete(0, "end")
+            results_box.delete(0, "end")
+            COMMANDS = parent.appcmds
+            if query.strip() != "":
                 for name in COMMANDS:
                     if query in name.lower():
                         results_box.insert("end", name)
-                if results_box.size() > 0:
-                    results_box.selection_set(0)
             else:
-                results_box.delete(0, 'end')
-                for command in COMMANDS:
-                    results_box.insert('end', command)
+                for name in COMMANDS:
+                    results_box.insert("end", name)
+            if results_box.size() > 0:
+                results_box.selection_set(0)
         
         def run_filtering(event=None):
             threading.Thread(target=filter_, daemon=True).start()
