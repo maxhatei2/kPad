@@ -1,6 +1,16 @@
 # kPad
 kPad is a Notepad app made in Python and CustomTkinter.
 
+## Test beta releases for kPad!
+
+Become a βeta Tester!
+
+1. Send me a DM on Reddit or Discord: karotoland
+2. Test the app for any bugs
+3. Send me the bugs and they'll be fixed.
+
+Check the pre-releases to find an Alpha/Beta release!
+
 **If you want to compile for your platform or just run the file, you will need customtkinter installed.**
 
 ### kPad 1.3.0 (RC6.0) Automaticis
@@ -57,5 +67,3 @@ Requests features with a new **issue**.
 ---
 
 Feel free to contribute or report issues on the **project repository**.
-
-## TODO
